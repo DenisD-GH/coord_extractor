@@ -4,11 +4,13 @@
 #include <string>
 #include <vector>
 #include <regex>
+#include <algorithm>
 
 struct Coordinate {
     double latitude;
     double longitude;
     std::string original_text;
+    std::string sentence;
 };
 
 std::string readTextFromFile(const std::string& filename) {
@@ -20,6 +22,37 @@ std::string readTextFromFile(const std::string& filename) {
     std::stringstream buffer;
     buffer << file.rdbuf();
     return buffer.str();
+}
+
+std::string findSentence(const std::string& text, const std::string& coordinate, size_t max_length = 200) {
+    size_t pos = text.find(coordinate);
+    if (pos == std::string::npos) {
+        return coordinate;
+    }
+    
+    size_t start = 0;
+    size_t dot_pos = text.rfind('.', pos);
+    if (dot_pos != std::string::npos && dot_pos > 0) {
+        start = dot_pos + 1;
+    }
+    
+    size_t end = text.find('.', pos);
+    if (end == std::string::npos) {
+        end = text.length();
+    } else {
+        end += 1;
+    }
+    
+    std::string sentence = text.substr(start, end - start);
+    
+    sentence.erase(0, sentence.find_first_not_of(" \n\r\t"));
+    sentence.erase(sentence.find_last_not_of(" \n\r\t") + 1);
+    
+    if (sentence.length() > max_length) {
+        sentence = sentence.substr(0, max_length) + "...";
+    }
+    
+    return sentence;
 }
 
 std::vector<Coordinate> findBasicCoordinates(const std::string& text) {
@@ -34,6 +67,7 @@ std::vector<Coordinate> findBasicCoordinates(const std::string& text) {
             coord.latitude = std::stod(matches[1]);
             coord.longitude = std::stod(matches[2]);
             coord.original_text = matches[0];
+            coord.sentence = findSentence(text, coord.original_text);
             
             if (coord.latitude >= -90.0 && coord.latitude <= 90.0 &&
                 coord.longitude >= -180.0 && coord.longitude <= 180.0) {
@@ -63,6 +97,7 @@ std::vector<Coordinate> findDirectionCoordinates(const std::string& text) {
             coord.latitude = (std::toupper(lat_dir[0]) == 'N') ? lat : -lat;
             coord.longitude = (std::toupper(lon_dir[0]) == 'E') ? lon : -lon;
             coord.original_text = matches[0];
+            coord.sentence = findSentence(text, coord.original_text);
             
             if (coord.latitude >= -90.0 && coord.latitude <= 90.0 &&
                 coord.longitude >= -180.0 && coord.longitude <= 180.0) {
@@ -76,7 +111,6 @@ std::vector<Coordinate> findDirectionCoordinates(const std::string& text) {
 
 std::vector<Coordinate> findCommaCoordinates(const std::string& text) {
     std::vector<Coordinate> coordinates;
-    // число,число° пробел число,число°
     std::regex pattern(R"((-?\d+,\d+)°?[\s,]+(-?\d+,\d+)°?)");
     std::smatch matches;
     std::string::const_iterator searchStart(text.cbegin());
@@ -93,6 +127,7 @@ std::vector<Coordinate> findCommaCoordinates(const std::string& text) {
             coord.latitude = std::stod(lat_str);
             coord.longitude = std::stod(lon_str);
             coord.original_text = matches[0];
+            coord.sentence = findSentence(text, coord.original_text);
             
             if (coord.latitude >= -90.0 && coord.latitude <= 90.0 &&
                 coord.longitude >= -180.0 && coord.longitude <= 180.0) {
@@ -132,13 +167,11 @@ int main(int argc, char* argv[]) {
         std::cout << "No coordinates found" << std::endl;
     } else {
         for (size_t i = 0; i < all_coordinates.size(); i++) {
-            std::cout << (i + 1) << ". Lat: " << all_coordinates[i].latitude 
-                      << ", Lon: " << all_coordinates[i].longitude 
-                      << " | Original: '" << all_coordinates[i].original_text << "'" << std::endl;
+            std::cout << (i + 1) << ". Lat: " << all_coordinates[i].latitude << ", Lon: " << all_coordinates[i].longitude << "\n   Original: '" << all_coordinates[i].original_text << "'"<< "\n   Sentence: '" << all_coordinates[i].sentence << "'"<< "\n" << std::endl;
         }
     }
     
-    std::cout << "\n=== SUMMARY ===" << std::endl;
+    std::cout << "=== SUMMARY ===" << std::endl;
     std::cout << "Basic format: " << basic_coordinates.size() << " coordinates" << std::endl;
     std::cout << "Direction format: " << direction_coordinates.size() << " coordinates" << std::endl;
     std::cout << "Comma format: " << comma_coordinates.size() << " coordinates" << std::endl;
