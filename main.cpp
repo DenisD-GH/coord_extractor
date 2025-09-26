@@ -25,7 +25,6 @@ std::string readTextFromFile(const std::string& filename) {
 std::vector<Coordinate> findBasicCoordinates(const std::string& text) {
     std::vector<Coordinate> coordinates;
     
-    // Регулярное выражение "число пробел число"
     std::regex pattern(R"((-?\d+\.\d+)\s+(-?\d+\.\d+))");
     std::smatch matches;
     
@@ -53,6 +52,42 @@ std::vector<Coordinate> findBasicCoordinates(const std::string& text) {
     return coordinates;
 }
 
+std::vector<Coordinate> findDirectionCoordinates(const std::string& text) {
+    std::vector<Coordinate> coordinates;
+    
+    std::regex pattern(R"(\b([NS])(\d+\.\d+)\s*([WE])(\d+\.\d+)\b)", std::regex::icase);
+    std::smatch matches;
+    
+    std::string::const_iterator searchStart(text.cbegin());
+    
+    while (std::regex_search(searchStart, text.cend(), matches, pattern)) {
+        try {
+            Coordinate coord;
+            std::string lat_dir = matches[1];
+            std::string lon_dir = matches[3];
+            
+            double lat = std::stod(matches[2]);
+            double lon = std::stod(matches[4]);
+            
+            coord.latitude = (std::toupper(lat_dir[0]) == 'N') ? lat : -lat;
+            coord.longitude = (std::toupper(lon_dir[0]) == 'E') ? lon : -lon;
+            coord.original_text = matches[0];
+            
+            if (coord.latitude >= -90.0 && coord.latitude <= 90.0 &&
+                coord.longitude >= -180.0 && coord.longitude <= 180.0) {
+                coordinates.push_back(coord);
+            }
+            
+        } catch (const std::exception& e) {
+            
+        }
+        
+        searchStart = matches.suffix().first;
+    }
+    
+    return coordinates;
+}
+
 int main(int argc, char* argv[]) {
     if (argc != 2) {
         std::cout << "Usage: " << argv[0] << " <text_file>" << std::endl;
@@ -72,17 +107,26 @@ int main(int argc, char* argv[]) {
     std::cout << "====================" << std::endl;
     std::cout << "Text length: " << text.length() << " characters" << std::endl;
     
-    // Поиск координат
-    auto coordinates = findBasicCoordinates(text);
+    auto basic_coordinates = findBasicCoordinates(text);
+    auto direction_coordinates = findDirectionCoordinates(text);
+    
+    std::vector<Coordinate> all_coordinates;
+    all_coordinates.insert(all_coordinates.end(), basic_coordinates.begin(), basic_coordinates.end());
+    all_coordinates.insert(all_coordinates.end(), direction_coordinates.begin(), direction_coordinates.end());
     
     std::cout << "\n=== FOUND COORDINATES ===" << std::endl;
-    if (coordinates.empty()) {
+    if (all_coordinates.empty()) {
         std::cout << "No coordinates found" << std::endl;
     } else {
-        for (size_t i = 0; i < coordinates.size(); i++) {
-            std::cout << (i + 1) << ". Lat: " << coordinates[i].latitude << ", Lon: " << coordinates[i].longitude << std::endl;
+        for (size_t i = 0; i < all_coordinates.size(); i++) {
+            std::cout << (i + 1) << ". Lat: " << all_coordinates[i].latitude << ", Lon: " << all_coordinates[i].longitude << std::endl;
         }
     }
+    
+    std::cout << "\n=== SUMMARY ===" << std::endl;
+    std::cout << "Basic format: " << basic_coordinates.size() << " coordinates" << std::endl;
+    std::cout << "Direction format: " << direction_coordinates.size() << " coordinates" << std::endl;
+    std::cout << "Total: " << all_coordinates.size() << " coordinates" << std::endl;
     
     return 0;
 }
